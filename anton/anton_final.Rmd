@@ -1,0 +1,74 @@
+---
+title: "anton_final"
+author: "Anton Hung"
+date: "2023-03-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+data <- read.csv("/Users/anton/Library/CloudStorage/GoogleDrive-anton.m.hung.gr@dartmouth.edu/Mon disque/winter term/QBS 177/Guihub/anton/data.csv")
+```
+
+
+```{r}
+data <- data[,-ncol(data)]
+dim(data)
+```
+
+```{r}
+my.pcx <- prcomp(data[,3:ncol(data)])
+```
+
+
+```{r}
+# plot(my.pcx)
+screeplot(my.pcx, type = "l", npcs = 10, main = "Variances of the First Ten Principle Components")
+```
+
+```{r}
+# biplot(my.pcx)
+# colour = ifelse(data$diagnosis == "M", 'red', 'blue')
+Diagnosis = ifelse(data$diagnosis == "M", 'Malignant', 'Benign')
+# plot(my.pcx$x[,1], my.pcx$x[,2], col=colour)
+library(ggplot2)
+my.plot <- ggplot(data=as.data.frame(my.pcx$x), aes(x = PC1, y = PC2, col=Diagnosis)) +
+  geom_point()
+my.plot
+```
+
+```{r}
+cumulative_var <- cumsum(my.pcx$sdev^2 / sum(my.pcx$sdev^2))
+plot(cumulative_var[1:15], xlab="PC #", ylab="Amount of explained variance")
+```
+
+
+```{r}
+library(MASS)
+group <- rep(0, length(Diagnosis))
+group[data == "Benign"] <- 1
+group[data == "Malignant"] <- 2
+
+z <- lda(diagnosis ~ ., data, prior = c(1,1)/2)
+
+fit <- predict(z, newdata=data)
+
+table(Diagnosis, fit$class)
+
+```
+
+```{r}
+(355+196)/(355+196+2+16) # 97% accuracy.
+```
+
+
+```{r}
+library(ggplot2)
+my.plot <- ggplot(data=as.data.frame(my.pcx$x), aes(x = PC1, y = PC2, col=fit$class)) +
+  geom_point()
+my.plot
+```
+
