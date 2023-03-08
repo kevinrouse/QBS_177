@@ -1,0 +1,100 @@
+---
+title: "QBS177_FinalProject"
+author: "Joe Gyorda"
+date: "2023-03-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+library(randomForest)
+library(rpart)
+library(dplyr)
+library(pROC)
+library(rpart.plot) # for plotting decision tree
+```
+
+```{r Read/preprocess data}
+setwd('/users/joegyorda/Desktop/')
+cancer_data = read.csv('cancer_data.csv')
+cancer_data2 = cancer_data[,-c(1,33)] # drop ID column, NA column
+cancer_data2$diagnosis = ifelse(cancer_data2$diagnosis=='M', 1, 0) # malignant=1, benign=0
+sum(is.na(cancer_data2)) # no NAs
+
+# from Digvijay's LASSO analysis - keep only 21 most informative predictors
+lasso_vars = c('texture_mean', 'area_mean', 'compactness_mean', 'concavity_mean', 'concave.points_mean', 'fractal_dimension_mean', 'radius_se', 'texture_se', 'smoothness_se', 'compactness_se', 'concavity_se', 'concave.points_se', 'symmetry_se', 'radius_worst', 'texture_worst', 'area_worst', 'smoothness_worst', 'concavity_worst', 'concave.points_worst', 'symmetry_worst', 'fractal_dimension_worst')
+
+cancer_data2 = cancer_data2 %>% 
+  select(lasso_vars)
+
+set.seed(40) # for reproducibility
+train_inds = runif(n=0.8*nrow(cancer_data2),min=1,max=nrow(cancer_data2))
+train_data = cancer_data2[train_inds,]
+test_data = cancer_data2[-train_inds,]
+```
+
+```{r decision tree plot}
+# try cross validation?
+
+decision_tree = rpart(diagnosis~.,data=train_data)
+# summary(decision_tree)
+
+rpart.plot::rpart.plot(decision_tree, extra=1, type=2, under=T)
+```
+
+```{r decision tree performance}
+
+pred_dt_tr = predict(decision_tree,train_data)
+pred_dt_te = predict(decision_tree,test_data)
+
+# Create the ROC curve
+roc_curve_tr <- roc(diagnosis ~ pred_dt_tr, data = train_data)
+roc_curve_te <- roc(diagnosis ~ pred_dt_te, data = test_data)
+
+# Plot the ROC curve
+plot(roc_curve_tr, main = "ROC Curves for Decision Tree Model", col = "blue",print.auc=T)
+plot(roc_curve_te, col = "red",print.auc=F,add=T)
+coords <- coords(roc_curve_te, "best", ret = c("threshold", "specificity", "sensitivity"))
+text(coords$threshold+0.2, coords$sensitivity-.525, labels = paste0("AUC = ", round(auc(roc_curve),2)), pos = 4, col='red')
+legend("bottomright", c("Train","Test"), col=c("blue","red"), lty=c(1,1)) 
+```
+
+```{r Random Forest}
+
+# in presentation, talk about hyperparameters
+# ntree=500 - default
+# mtry by defauly is sqrt(# parameters)
+rf <- randomForest(as.factor(diagnosis)~.,data=train_data) # try class_wt
+summary(rf)
+
+# plot(rf)
+
+pred_rf_tr = predict(rf,train_data)
+pred_rf_te = predict(rf,test_data)
+
+table(pred_rf_tr,train_data$diagnosis)
+```
+
+```{r random forest ROC curves}
+# Create the ROC curve
+roc_curve_tr <- roc(diagnosis ~ as.numeric(pred_rf_tr), data = train_data)
+roc_curve_te <- roc(diagnosis ~ as.numeric(pred_rf_te), data = test_data)
+
+# Plot the ROC curve
+plot(roc_curve_tr, main = "ROC Curves for Random Forest Model", col = "blue",print.auc=T)
+plot(roc_curve_te, col = "red",print.auc=F,add=T)
+coords <- coords(roc_curve_te, "best", ret = c("threshold", "specificity", "sensitivity"))
+text(coords$threshold-0.95, coords$sensitivity-.525, labels = paste0("AUC = ", round(auc(roc_curve),2)), pos = 4, col='red')
+legend("bottomright", c("Train","Test"), col=c("blue","red"), lty=c(1,1)) 
+```
+
+
+
+```{r Variable importance by Gini Index}
+varImpPlot(rf, main='Feature Importance of Random Forest Model')
+# library(caret)
+# caret::varImp(rf)
+```
